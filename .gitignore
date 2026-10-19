@@ -1,0 +1,20 @@
+*.iml
+.gradle
+/local.properties
+/.idea/
+.DS_Store
+/build
+/app/build
+captures
+.externalNativeBuild
+.cxx
+local.properties
+.agents/
+__pycache__/
+*.pyc
+
+# 根目录临时调试截图（精选截图已归档至 docs/screenshots/）
+/*.png
+/live_device_report.json
+/live_device_exported_report.json
+/ui_dialog.xml
