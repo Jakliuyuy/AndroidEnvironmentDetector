@@ -2,12 +2,39 @@
 System Inspector for Build Systems, NDK Config, APK Artifacts, and ADB Environment.
 """
 import os
+import shutil
+import glob
 import subprocess
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 
 class SystemInspector:
-    PROJECT_ROOT = "/root/环境检测"
+    PROJECT_ROOT = str(Path(__file__).resolve().parents[2])
+
+    @classmethod
+    def find_apksigner(cls) -> Optional[str]:
+        """Dynamically locates apksigner executable via PATH, ANDROID_HOME build-tools, or fallbacks."""
+        which_path = shutil.which("apksigner")
+        if which_path:
+            return which_path
+
+        for env_var in ["ANDROID_HOME", "ANDROID_SDK_ROOT"]:
+            sdk_root = os.environ.get(env_var)
+            if sdk_root and os.path.exists(sdk_root):
+                matches = glob.glob(os.path.join(sdk_root, "build-tools", "*", "apksigner"))
+                if matches:
+                    matches.sort()
+                    return matches[-1]
+
+        fallbacks = [
+            "/usr/bin/apksigner",
+            "/usr/local/bin/apksigner",
+        ]
+        for fb in fallbacks:
+            if os.path.exists(fb) and os.access(fb, os.X_OK):
+                return fb
+        return None
 
     @classmethod
     def check_gradle_wrapper(cls) -> Dict[str, Any]:

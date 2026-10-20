@@ -37,6 +37,14 @@ jobs:
           echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.2.12479018" "cmake;3.22.1"
           echo "ANDROID_NDK_ROOT=${ANDROID_HOME}/ndk/27.2.12479018" >> $GITHUB_ENV
 
+      - name: Add Android Build-Tools to PATH
+        run: |
+          BUILD_TOOLS_DIR=$(find ${ANDROID_HOME}/build-tools/ -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1)
+          if [ -n "$BUILD_TOOLS_DIR" ]; then
+            echo "$BUILD_TOOLS_DIR" >> $GITHUB_PATH
+            echo "Added $BUILD_TOOLS_DIR to PATH"
+          fi
+
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:

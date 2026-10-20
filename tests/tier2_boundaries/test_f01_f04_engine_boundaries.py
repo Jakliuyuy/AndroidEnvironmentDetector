@@ -36,10 +36,11 @@ class TestF01BuildBoundaries:
 
     def test_f01_boundary_special_character_in_path(self):
         """Build path containing spaces or non-ASCII characters is handled safely"""
-        project_path = "/root/环境检测"
-        os_safe_path = os_test_path(project_path)
+        sample_path = "/build/target with space/环境检测/app"
+        os_safe_path = os_test_path(sample_path)
         assert os_safe_path
         assert "环境检测" in os_safe_path
+        assert " " in os_safe_path
 
     def test_f01_boundary_missing_wrapper_properties_fallback(self):
         """System falls back gracefully when wrapper properties file is absent"""

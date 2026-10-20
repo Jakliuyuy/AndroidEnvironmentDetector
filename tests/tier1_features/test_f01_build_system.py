@@ -12,15 +12,17 @@ class TestF01BuildSystem:
         """Verifies Gradle Wrapper is configured for Gradle 8.11.1"""
         info = SystemInspector.check_gradle_wrapper()
         # Either wrapper file exists or local distribution exists in /root/.gradle
-        has_dist = os.path.exists("/root/.gradle/wrapper/dists/gradle-8.11.1-bin")
+        gradle_user_home = os.environ.get("GRADLE_USER_HOME", os.path.expanduser("~/.gradle"))
+        has_dist = os.path.exists(os.path.join(gradle_user_home, "wrapper/dists/gradle-8.11.1-bin"))
         assert info["has_8_11_1"] or has_dist, "Gradle 8.11.1 distribution must be specified"
 
     def test_f01_agp_and_kotlin_compatibility(self):
         """Verifies AGP 8.7.3 and Kotlin 2.0.21 caching or declaration"""
-        has_agp_cache = os.path.exists("/root/.gradle/caches/modules-2/files-2.1/com.android.application/com.android.application.gradle.plugin/8.7.3")
-        has_kotlin_cache = os.path.exists("/root/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin.android/org.jetbrains.kotlin.android.gradle.plugin/2.0.21")
-        assert has_agp_cache or os.path.exists("/root/环境检测/build.gradle.kts"), "AGP 8.7.3 must be available"
-        assert has_kotlin_cache or os.path.exists("/root/环境检测/settings.gradle.kts"), "Kotlin 2.0.21 must be available"
+        gradle_user_home = os.environ.get("GRADLE_USER_HOME", os.path.expanduser("~/.gradle"))
+        has_agp_cache = os.path.exists(os.path.join(gradle_user_home, "caches/modules-2/files-2.1/com.android.application/com.android.application.gradle.plugin/8.7.3"))
+        has_kotlin_cache = os.path.exists(os.path.join(gradle_user_home, "caches/modules-2/files-2.1/org.jetbrains.kotlin.android/org.jetbrains.kotlin.android.gradle.plugin/2.0.21"))
+        assert has_agp_cache or os.path.exists(os.path.join(SystemInspector.PROJECT_ROOT, "build.gradle.kts")), "AGP 8.7.3 must be available"
+        assert has_kotlin_cache or os.path.exists(os.path.join(SystemInspector.PROJECT_ROOT, "settings.gradle.kts")), "Kotlin 2.0.21 must be available"
 
     def test_f01_cmake_cxx17_configuration(self):
         """Verifies CMake configuration requires C++17 for native engine"""

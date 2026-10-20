@@ -2,8 +2,10 @@
 Tier 3: Cross-Feature Combinations
 25 Pairwise Interaction Test Cases covering interdependent detection vectors and combined states (including v1.1.0 R1-R7).
 """
+import os
 import json
 import pytest
+from tests.harness.system_inspector import SystemInspector
 from tests.harness.contracts import (
     DetectionCategory,
     DetectionStatus,
@@ -274,7 +276,8 @@ class TestTier3Combinations:
     # C25: Production R8 Shrinking (R5) + JNI Contract Protection
     def test_c25_r8_shrinking_plus_jni_contracts_integrity(self):
         """Validates R8 minification configuration protects JNI NativeDetectionItem class and fields"""
-        with open("/root/环境检测/app/proguard-rules.pro", "r", encoding="utf-8") as f:
+        rules_path = os.path.join(SystemInspector.PROJECT_ROOT, "app", "proguard-rules.pro")
+        with open(rules_path, "r", encoding="utf-8") as f:
             rules = f.read()
 
         assert "NativeDetectionItem" in rules

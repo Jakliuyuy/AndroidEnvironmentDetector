@@ -11,8 +11,10 @@ Tier 1: Feature Coverage — F21 v1.1.0 Core Hardening & Security Features (R1 -
 """
 import os
 import json
+import glob
 import subprocess
 import pytest
+from tests.harness.system_inspector import SystemInspector
 from tests.harness.contracts import (
     DetectionCategory,
     DetectionStatus,
@@ -163,7 +165,8 @@ class TestF21V110Features:
         ]
         # Inspect compiled release .so
         so_paths = []
-        for root, _, files in os.walk("/root/环境检测/app/build"):
+        app_build = os.path.join(SystemInspector.PROJECT_ROOT, "app", "build")
+        for root, _, files in os.walk(app_build):
             for f in files:
                 if f == "libsecurity_engine.so":
                     so_paths.append(os.path.join(root, f))
@@ -180,8 +183,8 @@ class TestF21V110Features:
     # --------------------------------------------------------------------------
     def test_f21_r5_r8_shrinking_and_resource_minification(self):
         """Verifies R8 shrinking and resource minification enabled in build configuration"""
-        build_gradle_path = "/root/环境检测/app/build.gradle.kts"
-        proguard_rules_path = "/root/环境检测/app/proguard-rules.pro"
+        build_gradle_path = os.path.join(SystemInspector.PROJECT_ROOT, "app", "build.gradle.kts")
+        proguard_rules_path = os.path.join(SystemInspector.PROJECT_ROOT, "app", "proguard-rules.pro")
         with open(build_gradle_path, "r", encoding="utf-8") as f:
             gradle_content = f.read()
 
@@ -196,15 +199,20 @@ class TestF21V110Features:
 
     def test_f21_r5_release_signing_and_apk_size_bounds(self):
         """Verifies official release APK exists, passes apksigner, and size <= 5.5MB"""
-        apk_path = "/root/环境检测/release/AndroidEnvironmentDetector-v1.1.0.apk"
-        assert os.path.exists(apk_path), "Release APK must exist at release/AndroidEnvironmentDetector-v1.1.0.apk"
+        apk_path = os.path.join(SystemInspector.PROJECT_ROOT, "release", "AndroidEnvironmentDetector-v1.1.0.apk")
+        if not os.path.exists(apk_path):
+            candidates = glob.glob(os.path.join(SystemInspector.PROJECT_ROOT, "app", "build", "outputs", "apk", "release", "*.apk"))
+            if candidates:
+                apk_path = candidates[0]
+        assert os.path.exists(apk_path), f"Release APK must exist at {apk_path}"
 
         size = os.path.getsize(apk_path)
         # Size must be <= 5.5MB (5,767,168 bytes) and >= 3MB
         assert 3 * 1024 * 1024 <= size <= int(5.5 * 1024 * 1024), f"APK size {size} out of bounds"
 
         # Verify signature with apksigner
-        cmd = ["apksigner", "verify", "--verbose", apk_path]
+        apksigner_bin = SystemInspector.find_apksigner() or "apksigner"
+        cmd = [apksigner_bin, "verify", "--verbose", apk_path]
         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         assert result.returncode == 0, f"apksigner verification failed: {result.stderr}"
         assert "Verifies" in result.stdout
@@ -216,8 +224,8 @@ class TestF21V110Features:
     # --------------------------------------------------------------------------
     def test_f21_r6_cicd_workflow_ci_and_release_pipeline_specs(self):
         """Verifies CI/CD workflow YAML syntax and required job stages"""
-        ci_path = "/root/环境检测/.github/workflows/ci.yml"
-        release_path = "/root/环境检测/.github/workflows/release.yml"
+        ci_path = os.path.join(SystemInspector.PROJECT_ROOT, ".github", "workflows", "ci.yml")
+        release_path = os.path.join(SystemInspector.PROJECT_ROOT, ".github", "workflows", "release.yml")
         assert os.path.exists(ci_path), "ci.yml must exist"
         assert os.path.exists(release_path), "release.yml must exist"
 

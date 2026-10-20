@@ -12,6 +12,7 @@ import os
 import json
 import pytest
 import subprocess
+from tests.harness.system_inspector import SystemInspector
 from tests.harness.contracts import (
     DetectionStatus,
 )
@@ -94,7 +95,8 @@ class TestF21V110Boundaries:
             zf.writestr("AndroidManifest.xml", b"<dummy>")
             zf.writestr("classes.dex", b"<dummy dex>")
 
-        cmd = ["apksigner", "verify", str(dummy_unsigned_apk)]
+        apksigner_bin = SystemInspector.find_apksigner() or "apksigner"
+        cmd = [apksigner_bin, "verify", str(dummy_unsigned_apk)]
         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         assert result.returncode != 0
         assert "DOES NOT VERIFY" in result.stdout or "DOES NOT VERIFY" in result.stderr or result.returncode != 0
