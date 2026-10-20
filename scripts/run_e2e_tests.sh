@@ -2,11 +2,11 @@
 # ==============================================================================
 # E2E Test Suite Runner for Android Environment Security Detection App
 # Supported Tiers:
-#   Tier 1: Feature Coverage (F01-F20, 100 tests)
-#   Tier 2: Boundary & Corner Cases (F01-F20, 100 tests)
-#   Tier 3: Cross-Feature Pairwise Combinations (20 tests)
+#   Tier 1: Feature Coverage (F01-F21, 114 tests)
+#   Tier 2: Boundary & Corner Cases (F01-F21, 106 tests)
+#   Tier 3: Cross-Feature Pairwise Combinations (25 tests)
 #   Tier 4: Real-World Threat Scenarios (S1-S5, 5 tests)
-# Total Test Suite: 225 Test Cases
+# Total Test Suite: 250 Test Cases
 # ==============================================================================
 
 set -o pipefail
@@ -37,7 +37,7 @@ print_usage() {
     echo -e "${CLR_BOLD}Usage:${CLR_RESET} $0 [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  --all             Run all test tiers (Tiers 1-4, 225 test cases) [Default]"
+    echo "  --all             Run all test tiers (Tiers 1-4, 250 test cases) [Default]"
     echo "  --tier <1|2|3|4>  Run a specific test tier only"
     echo "  --summary         Print test inventory without running"
     echo "  -v, --verbose     Verbose pytest execution output"
@@ -92,12 +92,12 @@ print_inventory_table() {
     echo -e "+-------+---------------------------------------+-------------+------------+"
     echo -e "| Tier  | Focus Area                            | Test Scope  | Test Count |"
     echo -e "+-------+---------------------------------------+-------------+------------+"
-    echo -e "| T1    | Feature Coverage (F01-F20)            | Baseline    | 100 tests  |"
-    echo -e "| T2    | Boundary & Corner Cases (F01-F20)     | Edge & Stress| 100 tests |"
-    echo -e "| T3    | Cross-Feature Combinations            | Pairwise    |  20 tests  |"
+    echo -e "| T1    | Feature Coverage (F01-F21)            | Baseline    | 114 tests  |"
+    echo -e "| T2    | Boundary & Corner Cases (F01-F21)     | Edge & Stress| 106 tests |"
+    echo -e "| T3    | Cross-Feature Combinations            | Pairwise    |  25 tests  |"
     echo -e "| T4    | Real-World Threat Scenarios (S1-S5)   | End-to-End  |   5 tests  |"
     echo -e "+-------+---------------------------------------+-------------+------------+"
-    echo -e "| TOTAL | Full Requirements Verification        | Complete    | 225 tests  |"
+    echo -e "| TOTAL | Full Requirements Verification        | Complete    | 250 tests  |"
     echo -e "+-------+---------------------------------------+-------------+------------+"
     echo ""
 }
@@ -111,11 +111,11 @@ fi
 case "${TARGET_TIER}" in
     "1")
         TEST_TARGET="${TESTS_DIR}/tier1_features"
-        TIER_LABEL="Tier 1: Feature Coverage (F01-F20)"
+        TIER_LABEL="Tier 1: Feature Coverage (F01-F21)"
         ;;
     "2")
         TEST_TARGET="${TESTS_DIR}/tier2_boundaries"
-        TIER_LABEL="Tier 2: Boundary & Corner Cases (F01-F20)"
+        TIER_LABEL="Tier 2: Boundary & Corner Cases (F01-F21)"
         ;;
     "3")
         TEST_TARGET="${TESTS_DIR}/tier3_combinations"
@@ -127,7 +127,7 @@ case "${TARGET_TIER}" in
         ;;
     "all")
         TEST_TARGET="${TESTS_DIR}"
-        TIER_LABEL="All Tiers (Tiers 1-4, 225 test cases)"
+        TIER_LABEL="All Tiers (Tiers 1-4, 250 test cases)"
         ;;
     *)
         echo -e "${CLR_RED}Invalid tier specified: ${TARGET_TIER}. Choose from 1, 2, 3, 4, or all.${CLR_RESET}"

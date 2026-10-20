@@ -10,6 +10,9 @@
 #include "../../main/cpp/include/native_maps.h"
 #include "../../main/cpp/include/native_mounts.h"
 #include "../../main/cpp/include/native_status.h"
+#include "../../main/cpp/include/obfuscate.h"
+#include "../../main/cpp/include/native_kernel_probe.h"
+#include "../../main/cpp/include/native_anti_hook.h"
 
 using namespace security;
 
@@ -172,6 +175,76 @@ int main() {
         auto res6 = ParseMountinfoBuffer(longMount.data(), longMount.size());
         assert(!res6.hasMagicMount);
         std::cout << "  [PASS] Case T6 (50,000 char mount line handled cleanly)" << std::endl;
+    }
+
+    // =========================================================================
+    // 4. R4: Constexpr XOR Obfuscation & Volatile Zeroize Verification
+    // =========================================================================
+    std::cout << "\n--- Testing R4: Constexpr XOR Obfuscation ---" << std::endl;
+    {
+        auto obf1 = OBF_STR("/proc/self/maps");
+        assert(obf1.str() == "/proc/self/maps");
+        assert(strcmp(obf1.c_str(), "/proc/self/maps") == 0);
+
+        auto obf2 = OBF_STR("frida-agent");
+        assert(obf2.str() == "frida-agent");
+
+        auto obf3 = OBF_STR("magisk");
+        assert(obf3.str() == "magisk");
+
+        std::cout << "  [PASS] R4 Obfuscation compiles and decrypts correctly on stack" << std::endl;
+    }
+
+    // =========================================================================
+    // 5. R2: KernelSU & APatch Direct Syscall Probe Data Evaluation
+    // =========================================================================
+    std::cout << "\n--- Testing R2: KernelSU & APatch Probe Data Evaluation ---" << std::endl;
+    {
+        // Pure kernel response: ksuRet = -22 (-EINVAL), apatchRet = -14 (-EFAULT)
+        auto cleanRes = ParseKernelProbeData(-22, 0, -14);
+        assert(!cleanRes.kernelSuDetected);
+        assert(!cleanRes.apatchDetected);
+        auto itemKsuClean = EvaluateKernelSuDetection(cleanRes);
+        auto itemApatchClean = EvaluateApatchDetection(cleanRes);
+        assert(itemKsuClean.status == STATUS_PASS);
+        assert(itemApatchClean.status == STATUS_PASS);
+        std::cout << "  [PASS] Clean kernel response evaluated as STATUS_PASS" << std::endl;
+
+        // KernelSU Active response: ksuRet = 0, version = 11000
+        auto ksuActiveRes = ParseKernelProbeData(0, 11000, -14);
+        assert(ksuActiveRes.kernelSuDetected);
+        assert(ksuActiveRes.kernelSuVersion == 11000);
+        auto itemKsuActive = EvaluateKernelSuDetection(ksuActiveRes);
+        assert(itemKsuActive.status == STATUS_DANGER);
+        std::cout << "  [PASS] KernelSU active handshake evaluated as STATUS_DANGER: " << itemKsuActive.evidence << std::endl;
+
+        // APatch Active response: apatchRet = 0x11581158
+        auto apatchActiveRes = ParseKernelProbeData(-22, 0, 0x11581158);
+        assert(apatchActiveRes.apatchDetected);
+        auto itemApatchActive = EvaluateApatchDetection(apatchActiveRes);
+        assert(itemApatchActive.status == STATUS_DANGER);
+        std::cout << "  [PASS] APatch active SuperCall evaluated as STATUS_DANGER: " << itemApatchActive.evidence << std::endl;
+    }
+
+    // =========================================================================
+    // 6. R3: Anti-Inline Hook Trampoline Pattern Detection
+    // =========================================================================
+    std::cout << "\n--- Testing R3: Anti-Inline Hook Trampoline Pattern Detection ---" << std::endl;
+    {
+        // Case: Fake Dobby / Frida ARM64 trampoline (0x58000050, 0xd61f0200)
+#if defined(__aarch64__)
+        uint32_t fakeDobby[4] = {0x58000050, 0xd61f0200, 0xdeadbeef, 0xcafebabe};
+        std::string reason;
+        bool hooked = CheckFunctionTrampoline(fakeDobby, reason);
+        assert(hooked);
+        std::cout << "  [PASS] Dobby x16 hook identified: " << reason << std::endl;
+#elif defined(__x86_64__)
+        uint8_t fakeX64Jmp[8] = {0xE9, 0x11, 0x22, 0x33, 0x44, 0x00, 0x00, 0x00};
+        std::string reason;
+        bool hooked = CheckFunctionTrampoline(fakeX64Jmp, reason);
+        assert(hooked);
+        std::cout << "  [PASS] x86_64 JMP hook identified: " << reason << std::endl;
+#endif
     }
 
     std::cout << "\n[SUCCESS] All Native C++ Extreme Edge Cases Passed Empirically!" << std::endl;

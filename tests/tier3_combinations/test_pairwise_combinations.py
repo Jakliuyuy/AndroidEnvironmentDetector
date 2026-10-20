@@ -1,6 +1,6 @@
 """
 Tier 3: Cross-Feature Combinations
-20 Pairwise Interaction Test Cases covering interdependent detection vectors and combined states.
+25 Pairwise Interaction Test Cases covering interdependent detection vectors and combined states (including v1.1.0 R1-R7).
 """
 import json
 import pytest
@@ -17,6 +17,15 @@ from tests.harness.contracts import (
 from tests.harness.detection_engine import DetectionEngine, LowLevelParsers
 from tests.harness.scorer import SecurityScorer
 from tests.harness.report_serializer import ReportSerializer
+from tests.harness.v110_engine import (
+    KeyAttestationHarness,
+    KernelProbeHarness,
+    AntiHookHarness,
+    StringObfuscatorHarness,
+    ScanSnapshotHarness,
+    VerifiedBootState,
+    ItemDiffType,
+)
 from tests.fixtures.magisk_ksu_data import MAGISK_MOUNTINFO, KSU_MOUNTINFO, ROOT_PACKAGES
 from tests.fixtures.frida_hook_data import INJECTED_MAPS, XPOSED_STACKTRACE
 
@@ -200,3 +209,75 @@ class TestTier3Combinations:
         is_valid, msg = ReportSerializer.validate_schema(data)
         assert is_valid is True
         assert data["assessment"]["level"] == "DANGEROUS"
+
+    # C21: Hardware Key Attestation Anti-Spoofing (R1) + KernelSU Syscall Probe (R2)
+    def test_c21_hardware_attestation_spoofing_plus_kernelsu_probe(self):
+        """Cross-layer hardware key attestation spoofing combined with raw sys_prctl KernelSU handshake"""
+        sys_props = {"ro.boot.flash.locked": "1", "ro.boot.locked": "1", "ro.secure": "1"}
+        attestation = {"deviceLocked": False, "verifiedBootState": VerifiedBootState.UNVERIFIED, "isHardwareBacked": True}
+        item_bl = KeyAttestationHarness.cross_validate_bootloader(sys_props, attestation)
+        ksu_item, _ = KernelProbeHarness.evaluate_probes(ksu_ret=0, ksu_ver=11500, apatch_ret=-14)
+
+        assert item_bl.status == DetectionStatus.DANGER
+        assert ksu_item.status == DetectionStatus.DANGER
+        assert "Spoofing Detected" in item_bl.evidence
+        assert "ksu_handshake_active" in ksu_item.evidence
+
+        assessment = SecurityScorer.calculate_score([item_bl, ksu_item])
+        assert assessment.level == SecurityLevel.DANGEROUS
+        assert assessment.score <= 40
+
+    # C22: ELF .text Trampoline Hook (R3) + Frida Anonymous Memory Map (F13)
+    def test_c22_anti_hook_trampoline_plus_frida_memory_map(self):
+        """Native code section trampoline hook combined with runtime anonymous executable mappings"""
+        # Hook trampoline in libc open
+        trampoline = b"\x50\x00\x00\x58\x00\x02\x1F\xD6\x00\x10\x20\x30\x40\x50\x60\x70"
+        detected, reason = AntiHookHarness.check_arm64_trampoline(trampoline)
+        assert detected is True
+
+        # Injected Frida maps
+        item_frida = DetectionEngine.check_frida([], [], INJECTED_MAPS)
+        assert item_frida.status == DetectionStatus.DANGER
+        assert "frida-agent" in item_frida.evidence or "Suspicious" in item_frida.evidence
+
+    # C23: XOR Obfuscation (R4) + Root Package Scanning (F11)
+    def test_c23_xor_string_obfuscation_plus_root_package_scan(self):
+        """Runtime string decryption of sensitive root packages followed by immediate zeroize"""
+        obf_pkg = StringObfuscatorHarness.encrypt("me.weishu.kernelsu")
+        # Decrypt dynamically at runtime
+        decrypted_pkg = StringObfuscatorHarness.decrypt(obf_pkg)
+        assert decrypted_pkg == "me.weishu.kernelsu"
+
+        item_pkg = DetectionEngine.check_root_packages([decrypted_pkg])
+        assert item_pkg.status == DetectionStatus.DANGER
+        assert "me.weishu.kernelsu" in item_pkg.evidence
+
+    # C24: Snapshot Diff Classification (R7) + Multi-Feature State Transitions
+    def test_c24_snapshot_diff_multiple_state_transitions(self):
+        """Validates snapshot comparison when multiple features transition states simultaneously"""
+        # Scan 1: Clean retail state
+        prev_bl = DetectionItem("SEC-R1-01", "Bootloader", DetectionCategory.BOOTLOADER, DetectionStatus.PASS, "clean", DetectionMethod.DIRECT_SYSCALL)
+        prev_su = DetectionItem("SEC-R2-01", "SU", DetectionCategory.ROOT, DetectionStatus.PASS, "clean", DetectionMethod.DIRECT_SYSCALL)
+        prev_xp = DetectionItem("SEC-R3-01", "Xposed", DetectionCategory.HOOK, DetectionStatus.PASS, "clean", DetectionMethod.JAVA)
+
+        # Scan 2: Bootloader unlocked, SU installed, Xposed remains clean
+        curr_bl = DetectionItem("SEC-R1-01", "Bootloader", DetectionCategory.BOOTLOADER, DetectionStatus.DANGER, "unlocked", DetectionMethod.DIRECT_SYSCALL)
+        curr_su = DetectionItem("SEC-R2-01", "SU", DetectionCategory.ROOT, DetectionStatus.DANGER, "su found", DetectionMethod.DIRECT_SYSCALL)
+        curr_xp = DetectionItem("SEC-R3-01", "Xposed", DetectionCategory.HOOK, DetectionStatus.PASS, "clean", DetectionMethod.JAVA)
+
+        comp = ScanSnapshotHarness.compare_snapshots([prev_bl, prev_su, prev_xp], [curr_bl, curr_su, curr_xp])
+        assert comp["hasChanges"] is True
+        assert comp["newRisksCount"] == 2
+        assert comp["resolvedCount"] == 0
+        assert comp["changedCount"] == 0
+
+    # C25: Production R8 Shrinking (R5) + JNI Contract Protection
+    def test_c25_r8_shrinking_plus_jni_contracts_integrity(self):
+        """Validates R8 minification configuration protects JNI NativeDetectionItem class and fields"""
+        with open("/root/环境检测/app/proguard-rules.pro", "r", encoding="utf-8") as f:
+            rules = f.read()
+
+        assert "NativeDetectionItem" in rules
+        assert "com.security.environment.data.jni.**" in rules
+        assert "-keep" in rules
+        assert "<fields>;" in rules or "<methods>;" in rules

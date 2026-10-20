@@ -1,6 +1,7 @@
 package com.security.environment.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +22,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -154,6 +157,60 @@ fun HomeScreen(
                 )
             }
 
+            // 1.1 扫描进行中的高科技雷达扫描视觉反馈卡片
+            if (uiState.isScanning) {
+                item(key = "radar_scanning_view") {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1E19)),
+                        border = BorderStroke(1.dp, Color(0xFF00E676).copy(alpha = 0.4f))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier.size(160.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                RadarScanView(
+                                    isScanning = true,
+                                    scanProgress = uiState.scanProgress,
+                                    modifier = Modifier.size(160.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "正在全量探测内核/Hook/Root/Bootloader特征...",
+                                color = Color(0xFF00E676),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "实时进度: ${(uiState.scanProgress * 100).toInt()}% | 双向 Syscall 握手比对中",
+                                color = Color(0xFF80CBC4),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 1.2 历史检测快照变动比对提示横幅 (若有变动且扫描已完成)
+            if (!uiState.isScanning && uiState.diffComparison?.hasChanges == true) {
+                item(key = "scan_diff_banner") {
+                    ScanDiffBanner(
+                        comparison = uiState.diffComparison,
+                        isExpanded = uiState.isDiffBannerExpanded,
+                        onToggleExpand = { viewModel.toggleDiffBannerExpanded() }
+                    )
+                }
+            }
+
             // 2. 五大维度快捷过滤器
             item(key = "category_grid") {
                 Column {
@@ -261,7 +318,8 @@ fun HomeScreen(
                 DetectionItemCard(
                     item = item,
                     isExpanded = uiState.expandedItemIds.contains(item.id),
-                    onToggleExpand = { viewModel.toggleItemExpanded(item.id) }
+                    onToggleExpand = { viewModel.toggleItemExpanded(item.id) },
+                    diff = uiState.getDiffForItem(item.id)
                 )
             }
 

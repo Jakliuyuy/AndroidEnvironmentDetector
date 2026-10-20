@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.security.environment.data.export.ReportSerializer
 import com.security.environment.data.jni.SecurityEngineNative
 import com.security.environment.data.model.DetectionCategory
+import com.security.environment.data.snapshot.ScanSnapshotManager
 import com.security.environment.domain.DetectionCoordinator
 import com.security.environment.domain.SecurityScorer
 import kotlinx.coroutines.CancellationException
@@ -25,8 +26,16 @@ class SecurityDashboardViewModel(
     private val engineNative: SecurityEngineNative = SecurityEngineNative(),
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
     autoScan: Boolean = true,
-    context: Context? = null
+    context: Context? = null,
+    private val snapshotManager: ScanSnapshotManager? = null
 ) : ViewModel() {
+
+    private var currentContext: Context? = context
+
+    private fun getSnapshotManager(callContext: Context?): ScanSnapshotManager {
+        val resolved = callContext ?: currentContext
+        return snapshotManager ?: ScanSnapshotManager(context = resolved)
+    }
 
     private val _uiState = MutableStateFlow(SecurityDashboardUiState())
     val uiState: StateFlow<SecurityDashboardUiState> = _uiState.asStateFlow()
@@ -57,6 +66,9 @@ class SecurityDashboardViewModel(
      * 触发异步非阻塞全量扫描
      */
     fun triggerScan(context: Context? = null) {
+        if (context != null) {
+            currentContext = context
+        }
         scanJob?.cancel()
         _uiState.update {
             it.copy(
@@ -85,6 +97,12 @@ class SecurityDashboardViewModel(
                             categorySummaries = summaries
                         )
 
+                        val currentTimestamp = System.currentTimeMillis()
+                        val manager = getSnapshotManager(context)
+                        val comparison = manager.compareWithLastSnapshot(items, currentTimestamp)
+                        manager.saveSnapshot(items, currentTimestamp)
+                        val diffMap = comparison.diffItems.associateBy { it.itemId }
+
                         _uiState.update {
                             it.copy(
                                 isScanning = false,
@@ -94,7 +112,9 @@ class SecurityDashboardViewModel(
                                 categorySummaries = summaries,
                                 exportedJson = json,
                                 exportedPlainText = text,
-                                lastScanTimestamp = System.currentTimeMillis()
+                                lastScanTimestamp = currentTimestamp,
+                                diffComparison = comparison,
+                                diffMap = diffMap
                             )
                         }
                     }
@@ -203,5 +223,12 @@ class SecurityDashboardViewModel(
      */
     fun dismissExportDialog() {
         _uiState.update { it.copy(showExportDialog = false) }
+    }
+
+    /**
+     * 展开/折叠历史快照差异横幅
+     */
+    fun toggleDiffBannerExpanded() {
+        _uiState.update { it.copy(isDiffBannerExpanded = !it.isDiffBannerExpanded) }
     }
 }

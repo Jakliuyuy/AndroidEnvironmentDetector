@@ -1,5 +1,6 @@
 #include "native_maps.h"
 #include "syscall_helper.h"
+#include "obfuscate.h"
 #include <sstream>
 #include <vector>
 #include <cstring>
@@ -7,34 +8,26 @@
 
 namespace security {
 
-static const char* const SUSPICIOUS_LIBS[] = {
-    "frida-agent",
-    "frida-gadget",
-    "linjector",
-    "gadget.so",
-    "liblspd.so",
-    "libxposed",
-    "libsandhook",
-    "libpine",
-    "libwhale",
-    "libepic",
-    "XposedBridge.jar",
-    "edxposed",
-    "libsubstrate.so",
-    "zygisk",
-    "riru"
-};
-
-static const char* const ANON_EXEC_WHITELIST[] = {
-    "[anon:dalvik-jit-code-cache]",
-    "[anon:dalvik-data-code-cache]",
-    "[anon:dalvik-zygote-jit-code-cache]",
-    "[anon:dalvik-alloc-space]",
-    "[stack]",
-    "[vectors]",
-    "[vdso]",
-    "[vsyscall]"
-};
+static const std::vector<std::string>& GetSuspiciousLibs() {
+    static const std::vector<std::string> libs = {
+        OBF_STR("frida-agent").str(),
+        OBF_STR("frida-gadget").str(),
+        OBF_STR("linjector").str(),
+        OBF_STR("gadget.so").str(),
+        OBF_STR("liblspd.so").str(),
+        OBF_STR("libxposed").str(),
+        OBF_STR("libsandhook").str(),
+        OBF_STR("libpine").str(),
+        OBF_STR("libwhale").str(),
+        OBF_STR("libepic").str(),
+        OBF_STR("XposedBridge.jar").str(),
+        OBF_STR("edxposed").str(),
+        OBF_STR("libsubstrate.so").str(),
+        OBF_STR("zygisk").str(),
+        OBF_STR("riru").str()
+    };
+    return libs;
+}
 
 static inline std::string Trim(const std::string& str) {
     size_t first = str.find_first_not_of(" \t\r\n");
@@ -44,7 +37,17 @@ static inline std::string Trim(const std::string& str) {
 }
 
 static bool IsInWhitelist(const std::string& pathname) {
-    for (const char* item : ANON_EXEC_WHITELIST) {
+    static const std::vector<std::string> whitelist = {
+        OBF_STR("[anon:dalvik-jit-code-cache]").str(),
+        OBF_STR("[anon:dalvik-data-code-cache]").str(),
+        OBF_STR("[anon:dalvik-zygote-jit-code-cache]").str(),
+        OBF_STR("[anon:dalvik-alloc-space]").str(),
+        OBF_STR("[stack]").str(),
+        OBF_STR("[vectors]").str(),
+        OBF_STR("[vdso]").str(),
+        OBF_STR("[vsyscall]").str()
+    };
+    for (const auto& item : whitelist) {
         if (pathname == item) {
             return true;
         }
@@ -94,7 +97,7 @@ MapsScanResult ParseMapsBuffer(const char* buffer, size_t length) {
 
         // Check 1: Known Hook / Dynamic Instrumentation Libraries
         if (!pathname.empty()) {
-            for (const char* keyword : SUSPICIOUS_LIBS) {
+            for (const auto& keyword : GetSuspiciousLibs()) {
                 if (pathname.find(keyword) != std::string::npos) {
                     result.hasHookLibrary = true;
                     if (result.hookLibraryName.empty()) {
@@ -146,7 +149,7 @@ MapsScanResult ParseMapsBuffer(const char* buffer, size_t length) {
 
 MapsScanResult ScanProcMapsDirect() {
     std::string mapsContent;
-    bool ok = DirectSyscallReadFileToString("/proc/self/maps", mapsContent, 2 * 1024 * 1024);
+    bool ok = DirectSyscallReadFileToString(OBF_STR("/proc/self/maps").c_str(), mapsContent, 2 * 1024 * 1024);
     if (!ok || mapsContent.empty()) {
         MapsScanResult res;
         res.hasHookLibrary = false;
@@ -162,7 +165,7 @@ MapsScanResult ScanProcMapsDirect() {
 NativeDetectionItem EvaluateMapsDetection(const MapsScanResult& result) {
     NativeDetectionItem item;
     item.id = "SEC-R3-04";
-    item.name = "内存映射与动态插桩检测 (/proc/self/maps)";
+    item.name = OBF_STR("内存映射与动态插桩检测 (/proc/self/maps)").str();
     item.category = CAT_HOOK;
     item.method = METHOD_DIRECT_SYSCALL;
 

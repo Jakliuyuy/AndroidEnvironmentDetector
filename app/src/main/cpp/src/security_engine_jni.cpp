@@ -12,6 +12,9 @@
 #include "native_mounts.h"
 #include "native_status.h"
 #include "native_props.h"
+#include "obfuscate.h"
+#include "native_kernel_probe.h"
+#include "native_anti_hook.h"
 
 #define LOG_TAG "SecurityEngineNative"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -124,20 +127,20 @@ static std::vector<security::NativeDetectionItem> PerformNativeSecurityChecks(in
     // Category 1: Root & Concealment (SU paths + mountinfo inspection)
     if (categoryFilter == -1 || categoryFilter == security::CAT_ROOT) {
         // Probe static SU paths with direct faccessat syscall
-        const char* suPaths[] = {
-            "/system/bin/su",
-            "/system/xbin/su",
-            "/sbin/su",
-            "/vendor/bin/su",
-            "/data/local/xbin/su",
-            "/data/local/bin/su",
-            "/data/local/su",
-            "/data/local/tmp/su"
+        static const auto suPaths = {
+            OBF_STR("/system/bin/su").str(),
+            OBF_STR("/system/xbin/su").str(),
+            OBF_STR("/sbin/su").str(),
+            OBF_STR("/vendor/bin/su").str(),
+            OBF_STR("/data/local/xbin/su").str(),
+            OBF_STR("/data/local/bin/su").str(),
+            OBF_STR("/data/local/su").str(),
+            OBF_STR("/data/local/tmp/su").str()
         };
         bool suFound = false;
         std::string foundPath = "None";
-        for (const char* path : suPaths) {
-            long ret = security::sys_faccessat(-100 /* AT_FDCWD */, path, F_OK, 0);
+        for (const auto& path : suPaths) {
+            long ret = security::sys_faccessat(-100 /* AT_FDCWD */, path.c_str(), F_OK, 0);
             if (ret == 0) {
                 suFound = true;
                 foundPath = path;
@@ -147,7 +150,7 @@ static std::vector<security::NativeDetectionItem> PerformNativeSecurityChecks(in
 
         results.push_back({
             "SEC-R2-01",
-            "基础 SU 二进制底层探测 (Direct Syscall)",
+            OBF_STR("基础 SU 二进制底层探测 (Direct Syscall)").str(),
             security::CAT_ROOT,
             suFound ? security::STATUS_DANGER : security::STATUS_PASS,
             "faccessat_path=" + foundPath,
@@ -157,6 +160,11 @@ static std::vector<security::NativeDetectionItem> PerformNativeSecurityChecks(in
         // Scan mountinfo for Magisk Magic Mount inversion & KernelSU / APatch mounts
         auto mountRes = security::ScanProcMountinfoDirect();
         results.push_back(security::EvaluateMountsDetection(mountRes));
+
+        // R2: KernelSU prctl handshake & APatch SuperCall probe
+        auto kernelRootRes = security::ProbeKernelRootDirect();
+        results.push_back(security::EvaluateKernelSuDetection(kernelRootRes));
+        results.push_back(security::EvaluateApatchDetection(kernelRootRes));
     }
 
     // Category 2: Dynamic Hook & Instrumentation (/proc/self/maps)
@@ -164,12 +172,17 @@ static std::vector<security::NativeDetectionItem> PerformNativeSecurityChecks(in
         // Frida & Xposed & anonymous executable memory scan via direct syscall
         auto mapsRes = security::ScanProcMapsDirect();
         results.push_back(security::EvaluateMapsDetection(mapsRes));
+
+        // R3: ELF .text integrity & Anti-Inline Hook trampoline probe
+        auto antiHookRes = security::ScanAntiHookIntegrityDirect();
+        results.push_back(security::EvaluateAntiHookDetection(antiHookRes));
     }
 
     // Category 3: Virtualization & Emulator
     if (categoryFilter == -1 || categoryFilter == security::CAT_VIRTUAL) {
-        std::string hardware = security::ReadSystemProperty("ro.hardware");
-        bool isQemu = (hardware.find("qemu") != std::string::npos || hardware.find("goldfish") != std::string::npos);
+        std::string hardware = security::ReadSystemProperty(OBF_STR("ro.hardware").c_str());
+        bool isQemu = (hardware.find(OBF_STR("qemu").str()) != std::string::npos ||
+                       hardware.find(OBF_STR("goldfish").str()) != std::string::npos);
 
         results.push_back({
             "SEC-R4-01",
@@ -186,8 +199,8 @@ static std::vector<security::NativeDetectionItem> PerformNativeSecurityChecks(in
         auto statusRes = security::ReadProcStatusDirect();
         results.push_back(security::EvaluateStatusDetection(statusRes));
 
-        std::string adbProp = security::ReadSystemProperty("init.svc.adbd");
-        int adbStatus = (adbProp == "running") ? security::STATUS_WARN : security::STATUS_PASS;
+        std::string adbProp = security::ReadSystemProperty(OBF_STR("init.svc.adbd").c_str());
+        int adbStatus = (adbProp == OBF_STR("running").str()) ? security::STATUS_WARN : security::STATUS_PASS;
         results.push_back({
             "SEC-R4-02",
             "ADB 调试守护进程状态",
@@ -317,5 +330,37 @@ Java_com_security_environment_data_jni_SecurityEngineNative_parseStatusBufferNat
     env->ReleaseStringUTFChars(jBuffer, str);
 
     auto item = security::EvaluateStatusDetection(res);
+    return CreateNativeDetectionItemObject(env, item);
+}
+
+extern "C" JNIEXPORT jobject JNICALL
+Java_com_security_environment_data_jni_SecurityEngineNative_checkKernelSuNative(
+    JNIEnv* env, jobject /*thiz*/) {
+    auto res = security::ProbeKernelRootDirect();
+    auto item = security::EvaluateKernelSuDetection(res);
+    return CreateNativeDetectionItemObject(env, item);
+}
+
+extern "C" JNIEXPORT jobject JNICALL
+Java_com_security_environment_data_jni_SecurityEngineNative_checkApatchNative(
+    JNIEnv* env, jobject /*thiz*/) {
+    auto res = security::ProbeKernelRootDirect();
+    auto item = security::EvaluateApatchDetection(res);
+    return CreateNativeDetectionItemObject(env, item);
+}
+
+extern "C" JNIEXPORT jobject JNICALL
+Java_com_security_environment_data_jni_SecurityEngineNative_checkKernelRootNative(
+    JNIEnv* env, jobject /*thiz*/) {
+    auto res = security::ProbeKernelRootDirect();
+    auto item = security::EvaluateKernelSuDetection(res);
+    return CreateNativeDetectionItemObject(env, item);
+}
+
+extern "C" JNIEXPORT jobject JNICALL
+Java_com_security_environment_data_jni_SecurityEngineNative_checkAntiHookNative(
+    JNIEnv* env, jobject /*thiz*/) {
+    auto res = security::ScanAntiHookIntegrityDirect();
+    auto item = security::EvaluateAntiHookDetection(res);
     return CreateNativeDetectionItemObject(env, item);
 }

@@ -1,6 +1,9 @@
 package com.security.environment.domain
 
 import com.security.environment.data.jni.SecurityEngineNative
+import com.security.environment.domain.attestation.KeyAttestationResult
+import com.security.environment.domain.attestation.KeyAttestationSource
+import com.security.environment.domain.attestation.KeyStoreAttestationSource
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -21,6 +24,7 @@ interface SystemEnvironment {
     fun getEnvironmentVariable(name: String): String?
     fun loadClassOrNull(className: String): Class<*>?
     fun getStackTrace(): Array<StackTraceElement>
+    fun getHardwareKeyAttestation(challenge: ByteArray? = null): KeyAttestationResult = KeyAttestationResult.Unavailable()
 }
 
 data class CommandResult(
@@ -30,7 +34,9 @@ data class CommandResult(
     val timedOut: Boolean = false
 )
 
-open class DefaultSystemEnvironment : SystemEnvironment {
+open class DefaultSystemEnvironment(
+    private val attestationSource: KeyAttestationSource = KeyStoreAttestationSource()
+) : SystemEnvironment {
 
     private val nativeEngine = SecurityEngineNative()
 
@@ -201,5 +207,9 @@ open class DefaultSystemEnvironment : SystemEnvironment {
 
     override fun getStackTrace(): Array<StackTraceElement> {
         return Throwable().stackTrace
+    }
+
+    override fun getHardwareKeyAttestation(challenge: ByteArray?): KeyAttestationResult {
+        return attestationSource.getAttestationResult(challenge)
     }
 }

@@ -14,6 +14,8 @@ long sys_close(int fd);
 long sys_readlinkat(int dfd, const char *path, char *buf, size_t bufsiz);
 long sys_faccessat(int dfd, const char *filename, int mode, int flags = 0);
 long sys_getpid();
+long sys_prctl(int option, unsigned long arg2 = 0, unsigned long arg3 = 0, unsigned long arg4 = 0, unsigned long arg5 = 0);
+long sys_truncate(const char *path, off_t length);
 
 // Direct syscall memory/buffer utilities for procfs interrogation
 // Reads entire file into buffer using raw syscalls without calling libc open/read/close

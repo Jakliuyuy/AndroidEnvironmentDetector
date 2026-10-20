@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include "syscall_helper.h"
+#include "obfuscate.h"
 
 namespace security {
 
@@ -30,14 +31,14 @@ std::string ReadSystemProperty(const char* key) {
 
 PropsScanResult ScanSecurityProperties() {
     PropsScanResult res;
-    res.flashLocked = ReadSystemProperty("ro.boot.flash.locked");
-    res.verifiedBootState = ReadSystemProperty("ro.boot.verifiedbootstate");
-    res.vbmetaState = ReadSystemProperty("ro.boot.vbmeta.device_state");
-    res.secure = ReadSystemProperty("ro.secure");
-    res.debuggable = ReadSystemProperty("ro.debuggable");
-    res.buildTags = ReadSystemProperty("ro.build.tags");
-    res.buildType = ReadSystemProperty("ro.build.type");
-    res.hardware = ReadSystemProperty("ro.hardware");
+    res.flashLocked = ReadSystemProperty(OBF_STR("ro.boot.flash.locked").c_str());
+    res.verifiedBootState = ReadSystemProperty(OBF_STR("ro.boot.verifiedbootstate").c_str());
+    res.vbmetaState = ReadSystemProperty(OBF_STR("ro.boot.vbmeta.device_state").c_str());
+    res.secure = ReadSystemProperty(OBF_STR("ro.secure").c_str());
+    res.debuggable = ReadSystemProperty(OBF_STR("ro.debuggable").c_str());
+    res.buildTags = ReadSystemProperty(OBF_STR("ro.build.tags").c_str());
+    res.buildType = ReadSystemProperty(OBF_STR("ro.build.type").c_str());
+    res.hardware = ReadSystemProperty(OBF_STR("ro.hardware").c_str());
 
     // Evaluate Bootloader unlocked state with whitespace and case hardening
     // Clean: locked="1", verifiedbootstate="green", vbmeta="locked"
@@ -48,9 +49,9 @@ PropsScanResult ScanSecurityProperties() {
 
     bool unlocked = false;
     if (flashLower == "0" ||
-        verifiedBootLower == "orange" ||
-        verifiedBootLower == "yellow" ||
-        vbmetaLower == "unlocked") {
+        verifiedBootLower == OBF_STR("orange").str() ||
+        verifiedBootLower == OBF_STR("yellow").str() ||
+        vbmetaLower == OBF_STR("unlocked").str()) {
         unlocked = true;
     }
     res.isBootloaderUnlocked = unlocked;
@@ -58,10 +59,10 @@ PropsScanResult ScanSecurityProperties() {
     // Evaluate debuggable / test-keys
     bool debugOrTest = false;
     if (res.debuggable == "1" ||
-        res.buildTags.find("test-keys") != std::string::npos ||
-        res.buildTags.find("dev-keys") != std::string::npos ||
-        res.buildType == "userdebug" ||
-        res.buildType == "eng") {
+        res.buildTags.find(OBF_STR("test-keys").str()) != std::string::npos ||
+        res.buildTags.find(OBF_STR("dev-keys").str()) != std::string::npos ||
+        res.buildType == OBF_STR("userdebug").str() ||
+        res.buildType == OBF_STR("eng").str()) {
         debugOrTest = true;
     }
     res.isDebuggableOrTestKeys = debugOrTest;

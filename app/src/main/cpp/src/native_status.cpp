@@ -1,5 +1,6 @@
 #include "native_status.h"
 #include "syscall_helper.h"
+#include "obfuscate.h"
 #include <sstream>
 #include <cstdlib>
 #include <cstring>
@@ -32,8 +33,10 @@ StatusScanResult ParseStatusBuffer(const char* buffer, size_t length) {
 
     while (std::getline(stream, line)) {
         line = Trim(line);
-        if (line.rfind("TracerPid:", 0) == 0) {
-            std::string valStr = line.substr(10);
+        std::string tracerKey = OBF_STR("TracerPid:").str();
+        std::string stateKey = OBF_STR("State:").str();
+        if (line.rfind(tracerKey, 0) == 0) {
+            std::string valStr = line.substr(tracerKey.length());
             valStr = Trim(valStr);
             try {
                 result.tracerPid = std::stoi(valStr);
@@ -41,8 +44,8 @@ StatusScanResult ParseStatusBuffer(const char* buffer, size_t length) {
             } catch (...) {
                 result.tracerPid = -1;
             }
-        } else if (line.rfind("State:", 0) == 0) {
-            result.state = Trim(line.substr(6));
+        } else if (line.rfind(stateKey, 0) == 0) {
+            result.state = Trim(line.substr(stateKey.length()));
         }
     }
 
@@ -58,7 +61,7 @@ StatusScanResult ParseStatusBuffer(const char* buffer, size_t length) {
 
 StatusScanResult ReadProcStatusDirect() {
     std::string statusContent;
-    bool ok = DirectSyscallReadFileToString("/proc/self/status", statusContent, 128 * 1024);
+    bool ok = DirectSyscallReadFileToString(OBF_STR("/proc/self/status").c_str(), statusContent, 128 * 1024);
     if (!ok || statusContent.empty()) {
         StatusScanResult res;
         res.tracerPid = -1;
@@ -74,7 +77,7 @@ StatusScanResult ReadProcStatusDirect() {
 NativeDetectionItem EvaluateStatusDetection(const StatusScanResult& result) {
     NativeDetectionItem item;
     item.id = "SEC-R4-04";
-    item.name = "进程跟踪调试状态检测 (TracerPid)";
+    item.name = OBF_STR("进程跟踪调试状态检测 (TracerPid)").str();
     item.category = CAT_DEBUG;
     item.method = METHOD_DIRECT_SYSCALL;
 

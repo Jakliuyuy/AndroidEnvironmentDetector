@@ -43,13 +43,16 @@ import androidx.compose.ui.unit.sp
 import com.security.environment.data.model.DetectionItem
 import com.security.environment.data.model.DetectionMethod
 import com.security.environment.data.model.DetectionStatus
+import com.security.environment.data.snapshot.DetectionDiff
+import com.security.environment.data.snapshot.ItemDiffType
 
 @Composable
 fun DetectionItemCard(
     item: DetectionItem,
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    diff: DetectionDiff? = null
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -118,8 +121,13 @@ fun DetectionItemCard(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // 右侧：方法胶囊 + 状态胶囊 + 折叠指示符
+                // 右侧：变动徽标 + 方法胶囊 + 状态胶囊 + 折叠指示符
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (diff != null && diff.diffType != ItemDiffType.UNCHANGED) {
+                        ItemDiffBadge(diff = diff)
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+
                     // Method badge
                     Box(
                         modifier = Modifier

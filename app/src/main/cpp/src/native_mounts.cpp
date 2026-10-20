@@ -1,5 +1,6 @@
 #include "native_mounts.h"
 #include "syscall_helper.h"
+#include "obfuscate.h"
 #include <sstream>
 #include <vector>
 #include <cstring>
@@ -7,27 +8,33 @@
 
 namespace security {
 
-static const char* const ROOT_MOUNT_SIGNATURES[] = {
-    "/data/adb/ksu",
-    "/data/adb/ap",
-    "/data/adb/modules",
-    "magisk",
-    "core/mirror",
-    "core/img",
-    "/sbin/.magisk",
-    "mirror/system",
-    "rootdir",
-    "kernelsu",
-    "apd"
-};
+static const std::vector<std::string>& GetRootMountSignatures() {
+    static const std::vector<std::string> signatures = {
+        OBF_STR("/data/adb/ksu").str(),
+        OBF_STR("/data/adb/ap").str(),
+        OBF_STR("/data/adb/modules").str(),
+        OBF_STR("magisk").str(),
+        OBF_STR("core/mirror").str(),
+        OBF_STR("core/img").str(),
+        OBF_STR("/sbin/.magisk").str(),
+        OBF_STR("mirror/system").str(),
+        OBF_STR("rootdir").str(),
+        OBF_STR("kernelsu").str(),
+        OBF_STR("apd").str()
+    };
+    return signatures;
+}
 
-static const char* const PROTECTED_SYSTEM_MOUNTS[] = {
-    "/system",
-    "/system_ext",
-    "/vendor",
-    "/product",
-    "/odm"
-};
+static const std::vector<std::string>& GetProtectedSystemMounts() {
+    static const std::vector<std::string> mounts = {
+        OBF_STR("/system").str(),
+        OBF_STR("/system_ext").str(),
+        OBF_STR("/vendor").str(),
+        OBF_STR("/product").str(),
+        OBF_STR("/odm").str()
+    };
+    return mounts;
+}
 
 static inline std::string Trim(const std::string& str) {
     size_t first = str.find_first_not_of(" \t\r\n");
@@ -39,7 +46,7 @@ static inline std::string Trim(const std::string& str) {
 static bool IsProtectedMountPoint(const std::string& mountPoint) {
     size_t last = mountPoint.find_last_not_of('/');
     std::string stripped = (last == std::string::npos) ? "/" : mountPoint.substr(0, last + 1);
-    for (const char* p : PROTECTED_SYSTEM_MOUNTS) {
+    for (const auto& p : GetProtectedSystemMounts()) {
         if (stripped == p) {
             return true;
         }
@@ -70,7 +77,7 @@ MountsScanResult ParseMountinfoBuffer(const char* buffer, size_t length) {
         if (line.empty() || line[0] == '#') continue;
 
         // Check 1: Root / KSU / APatch / Magisk trace keywords anywhere in the mount line
-        for (const char* sig : ROOT_MOUNT_SIGNATURES) {
+        for (const auto& sig : GetRootMountSignatures()) {
             if (line.find(sig) != std::string::npos) {
                 result.hasKernelSuOrApatch = true;
                 if (std::find(detectedSignatures.begin(), detectedSignatures.end(), sig) == detectedSignatures.end()) {
@@ -111,7 +118,7 @@ MountsScanResult ParseMountinfoBuffer(const char* buffer, size_t length) {
 
             // Check if protected partition is mounted as tmpfs or overlay (Magisk / KernelSU module inversion)
             if (IsProtectedMountPoint(mountPoint)) {
-                if (fstype == "tmpfs" || fstype == "overlay") {
+                if (fstype == OBF_STR("tmpfs").str() || fstype == OBF_STR("overlay").str()) {
                     result.hasMagicMount = true;
                     std::string anomaly = mountPoint + "(" + fstype + ")";
                     if (std::find(magicMounts.begin(), magicMounts.end(), anomaly) == magicMounts.end()) {
@@ -151,10 +158,10 @@ MountsScanResult ParseMountinfoBuffer(const char* buffer, size_t length) {
 
 MountsScanResult ScanProcMountinfoDirect() {
     std::string mountContent;
-    bool ok = DirectSyscallReadFileToString("/proc/self/mountinfo", mountContent, 2 * 1024 * 1024);
+    bool ok = DirectSyscallReadFileToString(OBF_STR("/proc/self/mountinfo").c_str(), mountContent, 2 * 1024 * 1024);
     if (!ok || mountContent.empty()) {
         // Fallback to /proc/mounts
-        ok = DirectSyscallReadFileToString("/proc/mounts", mountContent, 2 * 1024 * 1024);
+        ok = DirectSyscallReadFileToString(OBF_STR("/proc/mounts").c_str(), mountContent, 2 * 1024 * 1024);
     }
 
     if (!ok || mountContent.empty()) {
@@ -172,7 +179,7 @@ MountsScanResult ScanProcMountinfoDirect() {
 NativeDetectionItem EvaluateMountsDetection(const MountsScanResult& result) {
     NativeDetectionItem item;
     item.id = "SEC-R2-02";
-    item.name = "挂载点异常与新型Root特征 (/proc/self/mountinfo)";
+    item.name = OBF_STR("挂载点异常与新型Root特征 (/proc/self/mountinfo)").str();
     item.category = CAT_ROOT;
     item.method = METHOD_DIRECT_SYSCALL;
 

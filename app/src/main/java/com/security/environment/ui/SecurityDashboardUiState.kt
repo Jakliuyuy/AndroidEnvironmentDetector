@@ -6,6 +6,8 @@ import com.security.environment.data.model.DetectionItem
 import com.security.environment.data.model.DetectionStatus
 import com.security.environment.data.model.SecurityAssessment
 import com.security.environment.data.model.SecurityLevel
+import com.security.environment.data.snapshot.DetectionDiff
+import com.security.environment.data.snapshot.ScanComparisonResult
 
 data class SecurityDashboardUiState(
     val isScanning: Boolean = false,
@@ -22,8 +24,12 @@ data class SecurityDashboardUiState(
     val exportedPlainText: String = "",
     val isDirectSyscallSupported: Boolean = false,
     val errorMessage: String? = null,
-    val lastScanTimestamp: Long = 0L
+    val lastScanTimestamp: Long = 0L,
+    val diffComparison: ScanComparisonResult? = null,
+    val isDiffBannerExpanded: Boolean = false,
+    val diffMap: Map<String, DetectionDiff> = emptyMap()
 ) {
+    fun getDiffForItem(itemId: String): DetectionDiff? = diffMap[itemId]
     /**
      * 计算经过搜索词、分类筛选和仅显示异常过滤后的列表
      */

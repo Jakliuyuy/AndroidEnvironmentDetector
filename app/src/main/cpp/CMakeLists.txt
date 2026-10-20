@@ -19,6 +19,8 @@ add_library(
     src/native_mounts.cpp
     src/native_status.cpp
     src/native_props.cpp
+    src/native_kernel_probe.cpp
+    src/native_anti_hook.cpp
 )
 
 find_library(log-lib log)

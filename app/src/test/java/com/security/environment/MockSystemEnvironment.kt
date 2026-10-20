@@ -2,6 +2,7 @@ package com.security.environment
 
 import com.security.environment.domain.CommandResult
 import com.security.environment.domain.SystemEnvironment
+import com.security.environment.domain.attestation.KeyAttestationResult
 
 class MockSystemEnvironment : SystemEnvironment {
 
@@ -15,6 +16,7 @@ class MockSystemEnvironment : SystemEnvironment {
     val envVariables = mutableMapOf<String, String>()
     val loadedClasses = mutableMapOf<String, Class<*>>()
     var mockStackTrace: Array<StackTraceElement> = emptyArray()
+    var mockAttestationResult: KeyAttestationResult = KeyAttestationResult.Unavailable()
 
     override fun getSystemProperty(key: String): String? {
         return properties[key]
@@ -68,5 +70,9 @@ class MockSystemEnvironment : SystemEnvironment {
 
     override fun getStackTrace(): Array<StackTraceElement> {
         return mockStackTrace
+    }
+
+    override fun getHardwareKeyAttestation(challenge: ByteArray?): KeyAttestationResult {
+        return mockAttestationResult
     }
 }

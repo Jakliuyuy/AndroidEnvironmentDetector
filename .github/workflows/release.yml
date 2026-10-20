@@ -1,0 +1,104 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release:
+    name: Build Signed Release & Publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Install Android NDK & CMake
+        run: |
+          echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.2.12479018" "cmake;3.22.1"
+          echo "ANDROID_NDK_ROOT=${ANDROID_HOME}/ndk/27.2.12479018" >> $GITHUB_ENV
+
+      - name: Prepare Release Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p keystore
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > keystore/release.keystore
+            echo "Loaded release keystore from GitHub Secrets."
+          elif [ -f keystore/release.keystore ]; then
+            echo "Using existing repository release keystore."
+          else
+            echo "No keystore secret or file found, generating release keystore."
+            keytool -genkeypair -v \
+              -keystore keystore/release.keystore \
+              -alias "${{ secrets.KEY_ALIAS || 'securityrelease' }}" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass "${{ secrets.KEYSTORE_PASSWORD || 'android_sec_2026' }}" \
+              -keypass "${{ secrets.KEY_PASSWORD || 'android_sec_2026' }}" \
+              -dname "CN=ReleaseBuild, OU=SecurityLab, O=SecurityLab, L=Beijing, ST=Beijing, C=CN"
+          fi
+
+      - name: Build Signed Release APK (R8 Minified)
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'android_sec_2026' }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'securityrelease' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android_sec_2026' }}
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Verify Signature & Package Release Asset
+        run: |
+          APK_RAW="app/build/outputs/apk/release/app-release.apk"
+          if [ ! -f "$APK_RAW" ]; then
+            APK_RAW=$(find app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
+          fi
+          if [ -z "$APK_RAW" ] || [ ! -f "$APK_RAW" ]; then
+            echo "::error::Release APK not found in outputs!"
+            exit 1
+          fi
+
+          APK_SIZE_BYTES=$(stat -c%s "$APK_RAW")
+          APK_SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $APK_SIZE_BYTES / 1048576}")
+          echo "Release APK built successfully: $APK_RAW ($APK_SIZE_MB MB, $APK_SIZE_BYTES bytes)"
+
+          # Signature verification
+          APKSIGNER=$(find ${ANDROID_HOME}/build-tools/ -name "apksigner" 2>/dev/null | sort -V | tail -n 1)
+          if [ -n "$APKSIGNER" ]; then
+            echo "Verifying signature with $APKSIGNER..."
+            $APKSIGNER verify --verbose "$APK_RAW"
+          fi
+
+          TAG_NAME="${{ github.ref_name }}"
+          RELEASE_APK="app/build/outputs/apk/release/AndroidEnvironmentDetector-${TAG_NAME}.apk"
+          cp "$APK_RAW" "$RELEASE_APK"
+          echo "RELEASE_APK_PATH=$RELEASE_APK" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Android Environment Security Detector ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            ${{ env.RELEASE_APK_PATH }}

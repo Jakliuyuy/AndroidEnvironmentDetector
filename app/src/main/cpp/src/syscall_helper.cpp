@@ -92,6 +92,35 @@ long sys_getpid() {
     return x0;
 }
 
+long sys_prctl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5) {
+    register long x0 __asm__("x0") = static_cast<long>(option);
+    register long x1 __asm__("x1") = static_cast<long>(arg2);
+    register long x2 __asm__("x2") = static_cast<long>(arg3);
+    register long x3 __asm__("x3") = static_cast<long>(arg4);
+    register long x4 __asm__("x4") = static_cast<long>(arg5);
+    register long x8 __asm__("x8") = 167; // __NR_prctl
+    __asm__ volatile (
+        "svc #0\n\t"
+        : "+r"(x0)
+        : "r"(x1), "r"(x2), "r"(x3), "r"(x4), "r"(x8)
+        : "memory", "cc"
+    );
+    return x0;
+}
+
+long sys_truncate(const char *path, off_t length) {
+    register long x0 __asm__("x0") = reinterpret_cast<long>(path);
+    register long x1 __asm__("x1") = static_cast<long>(length);
+    register long x8 __asm__("x8") = 45; // __NR_truncate
+    __asm__ volatile (
+        "svc #0\n\t"
+        : "+r"(x0)
+        : "r"(x1), "r"(x8)
+        : "memory", "cc"
+    );
+    return x0;
+}
+
 // -----------------------------------------------------------------------------
 // ARM32 (armeabi-v7a) Implementation with Thumb r7 protection
 // -----------------------------------------------------------------------------
@@ -198,6 +227,40 @@ long sys_getpid() {
     return r0;
 }
 
+long sys_prctl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long /*arg5*/) {
+    register long r0 __asm__("r0") = static_cast<long>(option);
+    register long r1 __asm__("r1") = static_cast<long>(arg2);
+    register long r2 __asm__("r2") = static_cast<long>(arg3);
+    register long r3 __asm__("r3") = static_cast<long>(arg4);
+    long nr = 172; // __NR_prctl
+    __asm__ volatile (
+        "push {r7}\n\t"
+        "mov r7, %1\n\t"
+        "svc #0\n\t"
+        "pop {r7}\n\t"
+        : "+r"(r0)
+        : "r"(nr), "r"(r1), "r"(r2), "r"(r3)
+        : "memory", "cc"
+    );
+    return r0;
+}
+
+long sys_truncate(const char *path, off_t length) {
+    register long r0 __asm__("r0") = reinterpret_cast<long>(path);
+    register long r1 __asm__("r1") = static_cast<long>(length);
+    long nr = 92; // __NR_truncate
+    __asm__ volatile (
+        "push {r7}\n\t"
+        "mov r7, %1\n\t"
+        "svc #0\n\t"
+        "pop {r7}\n\t"
+        : "+r"(r0)
+        : "r"(nr), "r"(r1)
+        : "memory", "cc"
+    );
+    return r0;
+}
+
 // -----------------------------------------------------------------------------
 // x86_64 Implementation
 // -----------------------------------------------------------------------------
@@ -272,6 +335,31 @@ long sys_getpid() {
     return ret;
 }
 
+long sys_prctl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5) {
+    long ret;
+    register long r10 __asm__("r10") = static_cast<long>(arg4);
+    register long r8  __asm__("r8")  = static_cast<long>(arg5);
+    __asm__ volatile (
+        "syscall\n\t"
+        : "=a"(ret)
+        : "a"(157L), "D"(static_cast<long>(option)), "S"(static_cast<long>(arg2)),
+          "d"(static_cast<long>(arg3)), "r"(r10), "r"(r8)
+        : "rcx", "r11", "memory", "cc"
+    );
+    return ret;
+}
+
+long sys_truncate(const char *path, off_t length) {
+    long ret;
+    __asm__ volatile (
+        "syscall\n\t"
+        : "=a"(ret)
+        : "a"(76L), "D"(reinterpret_cast<long>(path)), "S"(static_cast<long>(length))
+        : "rcx", "r11", "memory", "cc"
+    );
+    return ret;
+}
+
 #else
 
 // Fallback for unsupported architectures
@@ -297,6 +385,22 @@ long sys_faccessat(int dfd, const char *filename, int mode, int flags) {
 
 long sys_getpid() {
     return ::getpid();
+}
+
+long sys_prctl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5) {
+#if defined(__NR_prctl)
+    return ::syscall(__NR_prctl, option, arg2, arg3, arg4, arg5);
+#else
+    return -1;
+#endif
+}
+
+long sys_truncate(const char *path, off_t length) {
+#if defined(__NR_truncate)
+    return ::syscall(__NR_truncate, path, length);
+#else
+    return -1;
+#endif
 }
 
 #endif

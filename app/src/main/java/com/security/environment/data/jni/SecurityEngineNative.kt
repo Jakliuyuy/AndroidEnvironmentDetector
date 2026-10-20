@@ -31,6 +31,11 @@ class SecurityEngineNative {
     external fun checkStatusNative(): NativeDetectionItem
     external fun getTracerPidNative(): Int
 
+    external fun checkKernelSuNative(): NativeDetectionItem
+    external fun checkApatchNative(): NativeDetectionItem
+    external fun checkKernelRootNative(): NativeDetectionItem
+    external fun checkAntiHookNative(): NativeDetectionItem
+
     external fun parseMapsBufferNative(buffer: String): NativeDetectionItem
     external fun parseMountinfoBufferNative(buffer: String): NativeDetectionItem
     external fun parseStatusBufferNative(buffer: String): NativeDetectionItem
